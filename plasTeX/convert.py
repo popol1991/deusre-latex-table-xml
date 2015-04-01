@@ -3,6 +3,8 @@ import sys
 from bs4 import BeautifulSoup
 from lxml import etree
 
+ALPHABET = '[a-zA-Z]'
+
 def makerow(row, node, subnode, tag):
     ret = etree.Element(node)
     elemlist = row.find_all(tag)
@@ -13,8 +15,10 @@ def makerow(row, node, subnode, tag):
         ret.append(sub)
     return ret
 
-def clean(rowlist):
-    cleaned = []
+def cleansplit(rowlist):
+    headerlist = []
+    datalist = []
+    databegin = False
     for row in rowlist:
         celllist = row.find_all('td')
         empty = True
@@ -22,9 +26,31 @@ def clean(rowlist):
             if len(cell.get_text().strip()) != 0:
                 empty = False
                 break
-        if not empty:
-            cleaned.append(row)
-    return cleaned
+        if empty:
+            continue
+
+        numerical = True
+        # assume the first cell is row header
+        for cell in celllist[min(2, len(celllist)):]:
+            text = cell.get_text()
+            abcount = 0
+            nocount = 0
+            for ch in text:
+                if ch.isalpha():
+                    abcount += 1
+                elif ch.isnumeric():
+                    nocount += 1
+            if abcount > nocount:
+                numerical = False
+                break
+        if numerical:
+            databegin = True
+
+        if not databegin:
+            headerlist.append(row)
+        else:
+            datalist.append(row)
+    return headerlist, datalist
 
 def load(path):
     ref = {}
@@ -98,12 +124,13 @@ def convert(path):
         table.append(group)
         tabletag = tb_node.find('table')
         rowlist = tabletag.find_all('tr')
-        rowlist = clean(rowlist)
-        # Assume the first row is header row
+        # Assume textual if there are alphabet in string
+        headerlist, rowlist = cleansplit(rowlist)
         # TODO: Do header recognition
-        headers = makerow(rowlist[0], 'headers', 'header', 'td')
-        group.append(headers)
-        for r in rowlist[1:]:
+        for r in headerlist:
+            headers = makerow(r, 'headers', 'header', 'td')
+            group.append(headers)
+        for r in rowlist:
             row = makerow(r, 'row', 'value', 'td')
             group.append(row)
 
