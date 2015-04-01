@@ -13,6 +13,19 @@ def makerow(row, node, subnode, tag):
         ret.append(sub)
     return ret
 
+def clean(rowlist):
+    cleaned = []
+    for row in rowlist:
+        celllist = row.find_all('td')
+        empty = True
+        for cell in celllist:
+            if len(cell.get_text().strip()) != 0:
+                empty = False
+                break
+        if not empty:
+            cleaned.append(row)
+    return cleaned
+
 def load(path):
     ref = {}
     with open(path) as fin:
@@ -85,6 +98,7 @@ def convert(path):
         table.append(group)
         tabletag = tb_node.find('table')
         rowlist = tabletag.find_all('tr')
+        rowlist = clean(rowlist)
         # Assume the first row is header row
         # TODO: Do header recognition
         headers = makerow(rowlist[0], 'headers', 'header', 'td')
