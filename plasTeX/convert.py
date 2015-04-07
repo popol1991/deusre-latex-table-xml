@@ -1,15 +1,25 @@
 #! /opt/python27/bin/python
-import sys
+import os
+from metadata import Metadata
 from bs4 import BeautifulSoup
-from lxml import etree
+from xml.etree.ElementTree import Element, tostring
+from xml.dom import minidom
 
 ALPHABET = '[a-zA-Z]'
+meta = Metadata("../mapping.txt")
+
+def prettify(elem):
+    """ Return a pretty-printed XML string
+    """
+    rough_string = tostring(elem, "utf-8")
+    reparsed = minidom.parseString(rough_string)
+    return reparsed.toprettyxml(indent=" ")
 
 def makerow(row, node, subnode, tag):
-    ret = etree.Element(node)
+    ret = Element(node)
     elemlist = row.find_all(tag)
     for elem in elemlist:
-        sub = etree.Element(subnode)
+        sub = Element(subnode)
         value = elem.get_text()
         sub.text = value.strip()
         ret.append(sub)
@@ -55,64 +65,81 @@ def cleansplit(rowlist):
 def load(path):
     ref = {}
     with open(path) as fin:
+        aid = fin.readline().strip()
         for line in fin:
-            label, sentence = line.strip().split('\t')
+            info = line.strip().split('\t')
+            label = info[0]
+            if len(info) == 2:
+                sentence = info[1]
+            else:
+                sentence = ""
             label = ":".join(label.split(':')[1:])
             ref[label] = sentence
-    return ref
+    return aid, ref
 
 def convert(path):
-    refdict = load(path + ".ref")
+    aid, refdict = load(path + ".ref")
+    aid = "http://arxiv.org/abs/" + aid
+    docmeta = meta.get_meatadata_with_external(aid)
     with open(path) as fin:
         html = "".join(fin.readlines())
     soup = BeautifulSoup(html)
-    xmltable = etree.Element('tables')
+    xmltable = Element('tables')
 
     # empty
-    xmltable.append(etree.Element("metadata"))
-    xmltable.append(etree.Element("authors"))
-    xmltable.append(etree.Element("keywords"))
+    xmltable.append(Element("metadata"))
+    xmltable.append(Element("authors"))
+    xmltable.append(Element("keywords"))
+
+    # arXiv ID
+    link = Element("link")
+    link.text = aid
+    xmltable.append(link)
 
     #article-title
-    title = soup.find("title").get_text()
-    xmltitle = etree.Element('article-title')
+    xmltitle = Element('article-title')
+    title = " ".join(docmeta["title"])
     xmltitle.text = title
     xmltable.append(xmltitle)
     # abstract
-    xmlabstract = etree.Element('abstract')
-    abstract_node = soup.find('blockquote', {'class' : 'abstract'})
-    if abstract_node is not None:
-        abstract = abstract_node.get_text()
-        xmlabstract.text = abstract
+    xmlabstract = Element('abstract')
+    abstract = " ".join(docmeta["description"])
+    xmlabstract.text = abstract
     xmltable.append(xmlabstract)
+    # subject
+    xmlsubject = Element('subject')
+    subject = " ".join(docmeta["subject"])
+    xmlsubject.text = subject
+    xmltable.append(xmlsubject)
 
     for tb_node in soup.findAll('blockquote', {'class' : 'table'}):
-        table = etree.Element('table')
+        table = Element('table')
 
         # caption
-        caption = etree.Element('caption')
+        caption = Element('caption')
         caption_node = tb_node.find('div', {'class' : 'caption'})
-        caption.text = caption_node.get_text().strip()
+        if caption_node is not None:
+            caption.text = caption_node.get_text().strip()
+            caption_node.extract()
         table.append(caption)
-        caption_node.extract()
 
         # footenote
-        footnote = etree.Element('footnote')
+        footnote = Element('footnote')
         ftnode = tb_node.find('ul', {'class' : 'itemize'})
         if ftnode is not None:
             footnote.text = ftnode.get_text()
         table.append(footnote)
 
         # context
-        contexts = etree.Element('contexts')
+        contexts = Element('contexts')
         label = tb_node.find('a')
         if label is not None:
             key = "{" + label["id"] + "}"
             citetext = refdict[key]
-            context = etree.Element('context')
-            heading = etree.Element('heading')
-            citation = etree.Element('citation')
-            sentence = etree.Element('sentence')
+            context = Element('context')
+            heading = Element('heading')
+            citation = Element('citation')
+            sentence = Element('sentence')
             sentence.text = citetext
             citation.append(sentence)
             context.append(heading)
@@ -120,9 +147,11 @@ def convert(path):
             contexts.append(context)
         table.append(contexts)
 
-        group = etree.Element('group')
+        group = Element('group')
         table.append(group)
         tabletag = tb_node.find('table')
+        if tabletag is None:
+            continue
         rowlist = tabletag.find_all('tr')
         # Assume textual if there are alphabet in string
         headerlist, rowlist = cleansplit(rowlist)
@@ -136,7 +165,14 @@ def convert(path):
 
         xmltable.append(table)
 
-    print etree.tostring(xmltable, pretty_print=True)
+    return prettify(xmltable)
 
 if __name__ == '__main__':
-    convert(sys.argv[1])
+    for root, dirs, files in os.walk(u"./data/"):
+        for f in files:
+            if f.endswith(".html"):
+                path = os.path.join(root, f)
+                fname = os.path.basename(path)
+                print path
+                with open(path+".xml", "w") as fout:
+                    fout.write(convert(path).encode('utf-8'))

@@ -1,5 +1,6 @@
 #! /opt/python27/bin/python
 import sys
+import ntpath
 import copy
 from plasTeX.TeX import TeX
 
