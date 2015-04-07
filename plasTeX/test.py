@@ -4,7 +4,7 @@ import ntpath
 import copy
 from plasTeX.TeX import TeX
 
-CMD_WANTED = set(['title', 'abstract', 'table'])
+CMD_WANTED = 'table'
 KNOWN_CMD = set(['caption', 'hline', 'label', '%', '\\'])
 NEWLINE_CMD = set(['\\', 'hline'])
 
@@ -99,7 +99,7 @@ def clean(path):
     try:
         while True:
             tok = it.next()
-            if tok in CMD_WANTED:
+            if tok == CMD_WANTED:
                 cmd = tok
                 content = ""
                 while tok != '}':
