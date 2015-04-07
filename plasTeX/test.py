@@ -8,6 +8,20 @@ CMD_WANTED = set(['title', 'abstract', 'table'])
 KNOWN_CMD = set(['caption', 'hline', 'label', '%', '\\'])
 NEWLINE_CMD = set(['\\', 'hline'])
 
+def get_arxiv_id(path):
+    fname = ntpath.basename(path)
+    fname = ".".join(fname.split('.')[:-1])
+    i = 0
+    prefix = ""
+    while fname[i].isalpha() or fname[i] == '-':
+        prefix += fname[i]
+        i += 1
+    if len(prefix) == 0:
+        fname = fname[i:]
+    else:
+        fname = "{0}/{1}".format(prefix, fname[i:])
+    return fname
+
 def print_table(table):
     print "".join(["\\begin{table}", table, "\\end{table}\n"])
 
@@ -78,7 +92,8 @@ def clean(path):
     except:
         pass
 
-    refout = open(sys.argv[2], 'w')
+    refout = open(sys.argv[3], 'w')
+    refout.write(get_arxiv_id(sys.argv[1]) + "\n")
     doc = TeX(file=path)
     it = doc.itertokens()
     try:
@@ -134,12 +149,12 @@ def clean(path):
         refout.close()
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print "Usage: test.py tex_file ref_output"
+    if len(sys.argv) != 4:
+        print "Usage: test.py arxiv_id tex_file ref_output"
         exit()
     print r"""
 \documentclass{article}
 \begin{document}
     """
-    clean(sys.argv[1])
+    clean(sys.argv[2])
 print r"\end{document}"
